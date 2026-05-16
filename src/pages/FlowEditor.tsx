@@ -64,6 +64,23 @@ export default function FlowEditor({ user }: FlowEditorProps) {
     setDirty(true)
   }, [])
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        saveFlow()
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
+        setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id))
+        setEdges((eds) => eds.filter((ed) => ed.source !== selectedNode.id && ed.target !== selectedNode.id))
+        setSelectedNode(null)
+        setDirty(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [saveFlow, selectedNode, setNodes, setEdges])
+
   const handleTest = useCallback(async () => {
     if (nodes.length === 0) return
     setTesting(true)
