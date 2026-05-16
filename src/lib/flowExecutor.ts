@@ -26,7 +26,7 @@ async function executeNode(
 
     case 'condition': {
       const condition = (node.data.condition as string) || ''
-      const result = await evaluateCondition(condition, input)
+      const result = await evaluateCondition(condition, node, input)
       output = result ? 'true' : 'false'
       break
     }
@@ -87,19 +87,25 @@ async function executeNode(
   return output
 }
 
-async function evaluateCondition(condition: string, input: string): Promise<boolean> {
-  const trimmed = condition.trim().toLowerCase()
-  if (trimmed.includes('is not empty') || trimmed.includes('not empty')) {
-    return input.trim().length > 0
+async function evaluateCondition(_condition: string, node: Node, input: string): Promise<boolean> {
+  const data = node.data as Record<string, string>
+  const variable = data.variable || '{{prev.output}}'
+  const operator = data.operator || 'is_not_empty'
+  const value = data.value || ''
+
+  const actualValue = variable === '{{prev.output}}' ? input : variable === '{{input}}' ? input : ''
+
+  switch (operator) {
+    case 'is_not_empty': return actualValue.trim().length > 0
+    case 'is_empty': return actualValue.trim().length === 0
+    case 'equals': return actualValue.toLowerCase() === value.toLowerCase()
+    case 'not_equals': return actualValue.toLowerCase() !== value.toLowerCase()
+    case 'contains': return actualValue.toLowerCase().includes(value.toLowerCase())
+    case 'starts_with': return actualValue.toLowerCase().startsWith(value.toLowerCase())
+    case 'greater_than': return Number(actualValue) > Number(value)
+    case 'less_than': return Number(actualValue) < Number(value)
+    default: return true
   }
-  if (trimmed.includes('is empty')) {
-    return input.trim().length === 0
-  }
-  if (trimmed.includes('contains')) {
-    const term = trimmed.split('contains')[1]?.trim().replace(/['"]/g, '') || ''
-    return input.toLowerCase().includes(term)
-  }
-  return true
 }
 
 export async function executeFlow(

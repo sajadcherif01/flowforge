@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { User, Contact } from '../types'
-import { Users, Search, MessageCircle, Mail, Globe } from 'lucide-react'
+import { Users, Search, MessageCircle, Mail, Globe, ExternalLink } from 'lucide-react'
 
 interface ContactsProps {
   user: User
@@ -14,6 +15,7 @@ const platformIcons: Record<string, React.ElementType> = {
 }
 
 export default function Contacts({ user }: ContactsProps) {
+  const navigate = useNavigate()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -83,7 +85,15 @@ export default function Contacts({ user }: ContactsProps) {
                 const PlatformIcon = platformIcons[contact.platform] || Globe
                 return (
                   <tr key={contact.id} className="hover:bg-gray-800/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-white">{contact.name || 'Unknown'}</td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => navigate(`/contacts/${contact.id}`)}
+                        className="text-sm font-medium text-white hover:text-cyan-400 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {contact.name || 'Unknown'}
+                        <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" />
+                      </button>
+                    </td>
                     <td className="px-6 py-4">
                       <span className="flex items-center gap-2 text-sm text-gray-300">
                         <PlatformIcon size={14} className="text-gray-400" />

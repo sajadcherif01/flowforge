@@ -1,5 +1,7 @@
+import { useRef, useCallback } from 'react'
 import type { Node } from '@xyflow/react'
 import { MessageSquare, Split, Timer, Brain, Send, Mail, Webhook, Zap } from 'lucide-react'
+import VariablePicker from './VariablePicker'
 
 interface SettingsPanelProps {
   node: Node | null
@@ -17,6 +19,66 @@ const colorMap: Record<string, string> = {
   email: 'text-emerald-400', webhook: 'text-rose-400',
 }
 
+interface FieldProps {
+  label: string
+  value: string
+  onChange: (val: string) => void
+  placeholder?: string
+  multiline?: boolean
+  rows?: number
+}
+
+function FieldWithVariables({ label, value, onChange, placeholder, multiline, rows }: FieldProps) {
+  const ref = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
+
+  const handleVariableSelect = useCallback((variable: string) => {
+    const el = ref.current
+    if (!el) {
+      onChange(value + variable)
+      return
+    }
+    const start = el.selectionStart ?? value.length
+    const end = el.selectionEnd ?? value.length
+    const newVal = value.slice(0, start) + variable + value.slice(end)
+    onChange(newVal)
+    requestAnimationFrame(() => {
+      const pos = start + variable.length
+      el.setSelectionRange(pos, pos)
+      el.focus()
+    })
+  }, [value, onChange])
+
+  const inputClass = "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none"
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-medium text-gray-400">{label}</label>
+        <VariablePicker onSelect={handleVariableSelect} />
+      </div>
+      {multiline ? (
+        <textarea
+          ref={ref as React.Ref<HTMLTextAreaElement>}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass + ` h-${rows || 24} resize-none`}
+          placeholder={placeholder}
+          rows={rows || 4}
+        />
+      ) : (
+        <input
+          ref={ref as React.Ref<HTMLInputElement>}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass}
+          placeholder={placeholder}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPanel({ node, onUpdate }: SettingsPanelProps) {
   if (!node) {
     return (
@@ -32,29 +94,55 @@ export default function SettingsPanel({ node, onUpdate }: SettingsPanelProps) {
   const Icon = iconMap[node.type!] || Zap
 
   const renderFields = () => {
+    const val = (key: string) => (node.data[key] as string) || ''
+    const upd = (key: string) => (v: string) => onUpdate(node.id, { ...node.data, [key]: v })
+
     switch (node.type) {
       case 'message':
         return (
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Message Text</label>
-            <textarea
-              value={(node.data.text as string) || ''}
-              onChange={(e) => onUpdate(node.id, { ...node.data, text: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24 resize-none"
-              placeholder="Enter your message..."
-            />
-          </div>
+          <FieldWithVariables
+            label="Message Text"
+            value={val('text')}
+            onChange={upd('text')}
+            placeholder="Enter your message..."
+            multiline
+            rows={6}
+          />
         )
       case 'condition':
         return (
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Condition</label>
-            <textarea
-              value={(node.data.condition as string) || ''}
-              onChange={(e) => onUpdate(node.id, { ...node.data, condition: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-20 resize-none"
-              placeholder="e.g. {{contact.name}} is not empty"
+            <FieldWithVariables
+              label="Variable"
+              value={val('variable')}
+              onChange={upd('variable')}
+              placeholder="e.g. {{contact.name}}"
             />
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Operator</label>
+              <select
+                value={val('operator') || 'is_not_empty'}
+                onChange={(e) => onUpdate(node.id, { ...node.data, operator: e.target.value })}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              >
+                <option value="is_not_empty">Is not empty</option>
+                <option value="is_empty">Is empty</option>
+                <option value="equals">Equals</option>
+                <option value="not_equals">Not equals</option>
+                <option value="contains">Contains</option>
+                <option value="starts_with">Starts with</option>
+                <option value="greater_than">Greater than</option>
+                <option value="less_than">Less than</option>
+              </select>
+            </div>
+            <div className="mt-3">
+              <FieldWithVariables
+                label="Value"
+                value={val('value')}
+                onChange={upd('value')}
+                placeholder="Value to compare"
+              />
+            </div>
           </div>
         )
       case 'delay':
@@ -63,7 +151,7 @@ export default function SettingsPanel({ node, onUpdate }: SettingsPanelProps) {
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Duration</label>
             <input
               type="text"
-              value={(node.data.delay as string) || ''}
+              value={val('delay')}
               onChange={(e) => onUpdate(node.id, { ...node.data, delay: e.target.value })}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="e.g. 5 minutes, 1 hour"
@@ -72,71 +160,60 @@ export default function SettingsPanel({ node, onUpdate }: SettingsPanelProps) {
         )
       case 'ai':
         return (
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">AI Prompt</label>
-            <textarea
-              value={(node.data.prompt as string) || ''}
-              onChange={(e) => onUpdate(node.id, { ...node.data, prompt: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24 resize-none"
-              placeholder="Enter the prompt for the AI..."
-            />
-          </div>
+          <FieldWithVariables
+            label="AI Prompt"
+            value={val('prompt')}
+            onChange={upd('prompt')}
+            placeholder="Enter the prompt for the AI..."
+            multiline
+            rows={6}
+          />
         )
       case 'telegram':
         return (
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Telegram Message</label>
-            <textarea
-              value={(node.data.text as string) || ''}
-              onChange={(e) => onUpdate(node.id, { ...node.data, text: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24 resize-none"
-              placeholder="Enter Telegram message..."
-            />
-          </div>
+          <FieldWithVariables
+            label="Telegram Message"
+            value={val('text')}
+            onChange={upd('text')}
+            placeholder="Enter Telegram message..."
+            multiline
+            rows={4}
+          />
         )
       case 'email':
         return (
           <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Subject</label>
-              <input
-                type="text"
-                value={(node.data.subject as string) || ''}
-                onChange={(e) => onUpdate(node.id, { ...node.data, subject: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                placeholder="Email subject..."
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Body</label>
-              <textarea
-                value={(node.data.body as string) || ''}
-                onChange={(e) => onUpdate(node.id, { ...node.data, body: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-24 resize-none"
-                placeholder="Email body..."
-              />
-            </div>
+            <FieldWithVariables
+              label="Subject"
+              value={val('subject')}
+              onChange={upd('subject')}
+              placeholder="Email subject..."
+            />
+            <FieldWithVariables
+              label="Body"
+              value={val('body')}
+              onChange={upd('body')}
+              placeholder="Email body..."
+              multiline
+              rows={6}
+            />
           </div>
         )
       case 'webhook':
         return (
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Webhook URL</label>
-            <input
-              type="url"
-              value={(node.data.url as string) || ''}
-              onChange={(e) => onUpdate(node.id, { ...node.data, url: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="https://..."
-            />
-          </div>
+          <FieldWithVariables
+            label="Webhook URL"
+            value={val('url')}
+            onChange={upd('url')}
+            placeholder="https://..."
+          />
         )
       case 'trigger':
         return (
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Trigger Event</label>
             <select
-              value={(node.data.event as string) || 'telegram_message'}
+              value={val('event') || 'telegram_message'}
               onChange={(e) => onUpdate(node.id, { ...node.data, event: e.target.value })}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >

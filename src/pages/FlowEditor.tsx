@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { User, Flow } from '../types'
-import { ArrowLeft, Save, Play, X, Loader, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowLeft, Save, Play, X, Loader, CheckCircle, XCircle, AlertTriangle, ListChecks } from 'lucide-react'
 import FlowCanvas from '../components/FlowBuilder/FlowCanvas'
 import NodePanel from '../components/FlowBuilder/NodePanel'
 import SettingsPanel from '../components/FlowBuilder/SettingsPanel'
 import { executeFlow, type ExecutionResult } from '../lib/flowExecutor'
+import { validateFlow, type ValidationIssue } from '../lib/flowValidator'
 import type { Node, Edge } from '@xyflow/react'
 
 interface FlowEditorProps {
@@ -20,11 +21,17 @@ export default function FlowEditor({ user }: FlowEditorProps) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [dirty, setDirty] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved')
   const [testing, setTesting] = useState(false)
   const [testResults, setTestResults] = useState<ExecutionResult[] | null>(null)
   const [showTestModal, setShowTestModal] = useState(false)
+  const [validation, setValidation] = useState<ValidationIssue[]>([])
+  const [showValidation, setShowValidation] = useState(false)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const markDirty = useCallback(() => {
+    setSaveStatus('unsaved')
+  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -39,47 +46,66 @@ export default function FlowEditor({ user }: FlowEditorProps) {
 
   const saveFlow = useCallback(async () => {
     if (!id) return
-    setSaving(true)
+    setSaveStatus('saving')
     await supabase.from('flows').update({
       nodes: nodes as unknown as Record<string, unknown>,
       edges: edges as unknown as Record<string, unknown>,
       updated_at: new Date().toISOString(),
     }).eq('id', id)
-    setSaving(false)
-    setDirty(false)
+    setSaveStatus('saved')
   }, [id, nodes, edges])
+
+  const syncDebounced = useCallback(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      saveFlow()
+    }, 3000)
+  }, [saveFlow])
+
+  useEffect(() => {
+    if (saveStatus === 'unsaved') syncDebounced()
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  }, [saveStatus, syncDebounced])
 
   const handleNodesChange = useCallback((newNodes: Node[]) => {
     setNodes(newNodes)
-    setDirty(true)
-  }, [])
+    markDirty()
+  }, [markDirty])
 
   const handleEdgesChange = useCallback((newEdges: Edge[]) => {
     setEdges(newEdges)
-    setDirty(true)
-  }, [])
+    markDirty()
+  }, [markDirty])
 
   const handleNodeUpdate = useCallback((nodeId: string, data: Record<string, unknown>) => {
     setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data } : n)))
-    setDirty(true)
-  }, [])
+    markDirty()
+  }, [markDirty])
+
+  useEffect(() => {
+    setValidation(validateFlow(nodes, edges))
+  }, [nodes, edges])
+
+  const errorCount = useMemo(() => validation.filter((v) => v.type === 'error').length, [validation])
+  const warningCount = useMemo(() => validation.filter((v) => v.type === 'warning').length, [validation])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
         saveFlow()
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
         setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id))
         setEdges((eds) => eds.filter((ed) => ed.source !== selectedNode.id && ed.target !== selectedNode.id))
         setSelectedNode(null)
-        setDirty(true)
+        markDirty()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [saveFlow, selectedNode, setNodes, setEdges])
+  }, [saveFlow, markDirty, selectedNode])
 
   const handleTest = useCallback(async () => {
     if (nodes.length === 0) return
@@ -90,6 +116,9 @@ export default function FlowEditor({ user }: FlowEditorProps) {
     setTestResults(results)
     setTesting(false)
   }, [nodes, edges, user.id])
+
+  const statusColor = { saved: 'text-green-400', unsaved: 'text-amber-400', saving: 'text-cyan-400' }
+  const statusLabel = { saved: 'Saved', unsaved: 'Unsaved', saving: 'Saving...' }
 
   if (!flow) {
     return (
@@ -121,14 +150,30 @@ export default function FlowEditor({ user }: FlowEditorProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {dirty && <span className="text-xs text-amber-400">Unsaved changes</span>}
+          <span className={`text-xs ${statusColor[saveStatus]} flex items-center gap-1`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${statusColor[saveStatus]}`} />
+            {statusLabel[saveStatus]}
+          </span>
           <button
-            onClick={saveFlow}
-            disabled={saving}
+            onClick={() => { setShowValidation(!showValidation) }}
+            className={`flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
+              errorCount > 0
+                ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20'
+                : warningCount > 0
+                  ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
+                  : 'text-green-400 bg-green-500/10 hover:bg-green-500/20'
+            }`}
+          >
+            <ListChecks size={14} />
+            {errorCount > 0 ? `${errorCount} error${errorCount > 1 ? 's' : ''}` : warningCount > 0 ? `${warningCount} warning${warningCount > 1 ? 's' : ''}` : 'Valid'}
+          </button>
+          <button
+            onClick={() => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); saveFlow() }}
+            disabled={saveStatus === 'saving'}
             className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-white text-sm font-medium rounded-lg px-4 py-2 transition-all shadow-lg shadow-cyan-500/25 disabled:opacity-50 cursor-pointer"
           >
             <Save size={16} />
-            {saving ? 'Saving...' : 'Save'}
+            {saveStatus === 'saving' ? 'Saving...' : 'Save'}
           </button>
           <button
             onClick={handleTest}
@@ -140,6 +185,23 @@ export default function FlowEditor({ user }: FlowEditorProps) {
           </button>
         </div>
       </header>
+
+      {showValidation && validation.length > 0 && (
+        <div className="bg-gray-900 border-b border-gray-800 px-6 py-3">
+          <p className="text-xs font-medium text-gray-400 mb-2">Flow Validation</p>
+          <div className="space-y-1.5">
+            {validation.map((v, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                {v.type === 'error'
+                  ? <XCircle size={12} className="text-red-400 shrink-0" />
+                  : <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                }
+                <span className={v.type === 'error' ? 'text-red-300' : 'text-amber-300'}>{v.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         <NodePanel />

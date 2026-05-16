@@ -8,6 +8,8 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import FlowEditor from './pages/FlowEditor'
 import Contacts from './pages/Contacts'
+import ContactDetail from './pages/ContactDetail'
+import Broadcast from './pages/Broadcast'
 import Settings from './pages/Settings'
 import Integrations from './pages/Integrations'
 
@@ -50,6 +52,8 @@ export default function App() {
         <Route path="/" element={<Dashboard user={user} />} />
         <Route path="/flow/:id" element={<FlowEditor user={user} />} />
         <Route path="/contacts" element={<Contacts user={user} />} />
+        <Route path="/contacts/:id" element={<ContactDetail user={user} />} />
+        <Route path="/broadcast" element={<Broadcast user={user} />} />
         <Route path="/settings" element={<Settings user={user} />} />
         <Route path="/integrations" element={<Integrations user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
