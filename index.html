@@ -5,9 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FlowForge</title>
+    <style>
+      .loading-screen { display: flex; height: 100vh; align-items: center; justify-content: center; background: #030712; color: #9ca3af; font-family: sans-serif; flex-direction: column; gap: 16px; }
+      .loading-spinner { width: 32px; height: 32px; border: 3px solid #1f2937; border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="loading-screen"><div class="loading-spinner"></div><div>Loading FlowForge...</div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
