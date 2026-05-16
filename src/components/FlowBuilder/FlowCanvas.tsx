@@ -15,6 +15,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import TriggerNode from './nodes/TriggerNode'
 import MessageNode from './nodes/MessageNode'
 import ConditionNode from './nodes/ConditionNode'
 import DelayNode from './nodes/DelayNode'
@@ -24,6 +25,7 @@ import EmailNode from './nodes/EmailNode'
 import WebhookNode from './nodes/WebhookNode'
 
 const nodeTypes: NodeTypes = {
+  trigger: TriggerNode,
   message: MessageNode,
   condition: ConditionNode,
   delay: DelayNode,

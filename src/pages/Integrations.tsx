@@ -1,9 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import type { User } from '../types'
-import { Send, Mail, Webhook, Plug, Check, Key } from 'lucide-react'
+import { Send, Mail, Webhook, Plug, Check, Key, Loader } from 'lucide-react'
 
 interface IntegrationsProps {
   user: User
+}
+
+interface IntegrationField {
+  key: string
+  label: string
+  type: string
+  placeholder: string
 }
 
 interface Integration {
@@ -13,11 +21,12 @@ interface Integration {
   icon: React.ElementType
   color: string
   bgColor: string
-  fields: { key: string; label: string; type: string; placeholder: string }[]
+  fields: IntegrationField[]
   connected: boolean
+  settingsKey: string
 }
 
-const defaultIntegrations: Integration[] = [
+const integrationDefs: Integration[] = [
   {
     id: 'telegram',
     name: 'Telegram Bot',
@@ -25,8 +34,9 @@ const defaultIntegrations: Integration[] = [
     icon: Send,
     color: 'text-sky-400',
     bgColor: 'bg-sky-500/10',
-    fields: [{ key: 'bot_token', label: 'Bot Token', type: 'password', placeholder: 'Enter your Telegram bot token' }],
+    fields: [{ key: 'telegram_bot_token', label: 'Bot Token', type: 'password', placeholder: 'Enter your Telegram bot token' }],
     connected: false,
+    settingsKey: 'telegram_bot_token',
   },
   {
     id: 'smtp',
@@ -36,12 +46,13 @@ const defaultIntegrations: Integration[] = [
     color: 'text-emerald-400',
     bgColor: 'bg-emerald-500/10',
     fields: [
-      { key: 'host', label: 'SMTP Host', type: 'text', placeholder: 'smtp.example.com' },
-      { key: 'port', label: 'Port', type: 'text', placeholder: '587' },
-      { key: 'username', label: 'Username', type: 'text', placeholder: 'user@example.com' },
-      { key: 'password', label: 'Password', type: 'password', placeholder: 'SMTP password' },
+      { key: 'smtp_host', label: 'SMTP Host', type: 'text', placeholder: 'smtp.example.com' },
+      { key: 'smtp_port', label: 'Port', type: 'text', placeholder: '587' },
+      { key: 'smtp_username', label: 'Username', type: 'text', placeholder: 'user@example.com' },
+      { key: 'smtp_password', label: 'Password', type: 'password', placeholder: 'SMTP password' },
     ],
     connected: false,
+    settingsKey: 'smtp_host',
   },
   {
     id: 'webhook',
@@ -50,31 +61,78 @@ const defaultIntegrations: Integration[] = [
     icon: Webhook,
     color: 'text-rose-400',
     bgColor: 'bg-rose-500/10',
-    fields: [{ key: 'secret', label: 'Webhook Secret', type: 'password', placeholder: 'Optional webhook secret' }],
+    fields: [{ key: 'webhook_secret', label: 'Webhook Secret', type: 'password', placeholder: 'Optional webhook secret' }],
     connected: false,
+    settingsKey: 'webhook_secret',
   },
 ]
 
-export default function Integrations({ user: _user }: IntegrationsProps) {
-  const [integrations, setIntegrations] = useState(defaultIntegrations)
+export default function Integrations({ user }: IntegrationsProps) {
+  const [integrations, setIntegrations] = useState(integrationDefs)
   const [configuring, setConfiguring] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    supabase.from('user_settings').select('*').eq('user_id', user.id).single().then(({ data }) => {
+      if (data) {
+        setIntegrations((prev) =>
+          prev.map((int) => ({
+            ...int,
+            connected: !!data[int.settingsKey as keyof typeof data],
+          }))
+        )
+      }
+      setLoading(false)
+    })
+  }, [user.id])
 
   const handleConfigure = (id: string) => {
     setConfiguring(id)
     setFormValues({})
   }
 
-  const handleSave = (id: string) => {
-    setIntegrations((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, connected: true } : i))
-    )
+  const handleSave = async (id: string) => {
+    setSaving(true)
+    const updates: Record<string, string> = {}
+    for (const key of Object.keys(formValues)) {
+      updates[key] = formValues[key]
+    }
+    const { error } = await supabase.from('user_settings').upsert({
+      user_id: user.id,
+      ...updates,
+    }, { onConflict: 'user_id' })
+    if (!error) {
+      setIntegrations((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, connected: true } : i))
+      )
+    }
+    setSaving(false)
     setConfiguring(null)
   }
 
-  const handleDisconnect = (id: string) => {
+  const handleDisconnect = async (id: string) => {
+    const int = integrations.find((i) => i.id === id)
+    if (!int) return
+    const nullUpdates: Record<string, null> = {}
+    for (const field of int.fields) {
+      nullUpdates[field.key] = null
+    }
+    await supabase.from('user_settings').upsert({
+      user_id: user.id,
+      ...nullUpdates,
+    }, { onConflict: 'user_id' })
     setIntegrations((prev) =>
       prev.map((i) => (i.id === id ? { ...i, connected: false } : i))
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader size={24} className="animate-spin text-gray-400" />
+      </div>
     )
   }
 
@@ -145,9 +203,10 @@ export default function Integrations({ user: _user }: IntegrationsProps) {
                   <div className="flex items-center gap-2 pt-2">
                     <button
                       onClick={() => handleSave(integration.id)}
-                      className="bg-cyan-500 hover:bg-cyan-400 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors cursor-pointer"
+                      disabled={saving}
+                      className="bg-cyan-500 hover:bg-cyan-400 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors disabled:opacity-50 cursor-pointer"
                     >
-                      Save & Connect
+                      {saving ? 'Saving...' : 'Save & Connect'}
                     </button>
                     <button
                       onClick={() => setConfiguring(null)}
