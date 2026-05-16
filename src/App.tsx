@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-import type { User } from './types'
+import type { User } from '@supabase/supabase-js'
 import Layout from './components/Layout/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'

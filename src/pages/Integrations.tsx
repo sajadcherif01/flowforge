@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { User } from '../types'
-import { Send, Mail, Webhook, Plug, Check, X, Key } from 'lucide-react'
+import { Send, Mail, Webhook, Plug, Check, Key } from 'lucide-react'
 
 interface IntegrationsProps {
   user: User

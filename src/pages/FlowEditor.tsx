@@ -2,17 +2,18 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { User, Flow } from '../types'
-import { ArrowLeft, Save, Play, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Play } from 'lucide-react'
 import FlowCanvas from '../components/FlowBuilder/FlowCanvas'
 import NodePanel from '../components/FlowBuilder/NodePanel'
 import SettingsPanel from '../components/FlowBuilder/SettingsPanel'
 import type { Node, Edge } from '@xyflow/react'
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface FlowEditorProps {
   user: User
 }
 
-export default function FlowEditor({ user }: FlowEditorProps) {
+export default function FlowEditor(_props: FlowEditorProps) {
   const { id } = useParams()
   const navigate = useNavigate()
   const [flow, setFlow] = useState<Flow | null>(null)

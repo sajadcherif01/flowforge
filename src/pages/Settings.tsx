@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { User } from '../types'
-import { Settings as SettingsIcon, Key, User as UserIcon } from 'lucide-react'
+import { Key, User as UserIcon } from 'lucide-react'
 
 interface SettingsProps {
   user: User

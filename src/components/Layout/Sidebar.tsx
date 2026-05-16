@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, GitBranch, Users, Settings, Plug, LogOut, Bot } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, Plug, LogOut, Bot } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const links = [
