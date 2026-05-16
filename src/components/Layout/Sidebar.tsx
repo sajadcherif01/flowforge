@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, Settings, Plug, LogOut, Bot, Send } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, Plug, LogOut, Bot, Send, LayoutTemplate } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/contacts', icon: Users, label: 'Contacts' },
+  { to: '/templates', icon: LayoutTemplate, label: 'Templates' },
   { to: '/broadcast', icon: Send, label: 'Broadcast' },
   { to: '/integrations', icon: Plug, label: 'Integrations' },
   { to: '/settings', icon: Settings, label: 'Settings' },

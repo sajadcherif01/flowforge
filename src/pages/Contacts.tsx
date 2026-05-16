@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import type { User, Contact } from '../types'
-import { Users, Search, MessageCircle, Mail, Globe, ExternalLink } from 'lucide-react'
+import type { User, Contact, Tag } from '../types'
+import { Users, Search, MessageCircle, Mail, Globe, ExternalLink, Hash, SlidersHorizontal } from 'lucide-react'
 
 interface ContactsProps {
   user: User
@@ -16,25 +16,29 @@ const platformIcons: Record<string, React.ElementType> = {
 
 export default function Contacts({ user }: ContactsProps) {
   const navigate = useNavigate()
-  const [contacts, setContacts] = useState<Contact[]>([])
+  const [contacts, setContacts] = useState<(Contact & { tags?: string[] })[]>([])
+  const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
+  const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
-    supabase
-      .from('contacts')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setContacts(data)
-        setLoading(false)
-      })
-  }, [])
+    Promise.all([
+      supabase.from('contacts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('tags').select('*').eq('user_id', user.id),
+    ]).then(([contactsRes, tagsRes]) => {
+      if (contactsRes.data) setContacts(contactsRes.data)
+      if (tagsRes.data) setAllTags(tagsRes.data)
+      setLoading(false)
+    })
+  }, [user.id])
 
-  const filtered = contacts.filter((c) =>
-    c.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = contacts.filter((c) => {
+    const matchesSearch = c.name?.toLowerCase().includes(search.toLowerCase())
+    if (selectedTagIds.size === 0) return matchesSearch
+    return matchesSearch
+  })
 
   if (loading) {
     return (
@@ -51,22 +55,68 @@ export default function Contacts({ user }: ContactsProps) {
           <h1 className="text-2xl font-bold text-white">Contacts</h1>
           <p className="text-gray-400 text-sm mt-1">{contacts.length} total contacts</p>
         </div>
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search contacts..."
-            className="bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 w-64"
-          />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 text-xs font-medium rounded-lg px-3 py-2 transition-colors cursor-pointer ${
+              selectedTagIds.size > 0 ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-gray-800 text-gray-400 hover:text-white border border-transparent'
+            }`}
+          >
+            <SlidersHorizontal size={14} />
+            Filters {selectedTagIds.size > 0 && `(${selectedTagIds.size})`}
+          </button>
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search contacts..."
+              className="bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 w-64"
+            />
+          </div>
         </div>
       </div>
+
+      {showFilters && allTags.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
+          <p className="text-xs font-medium text-gray-400 mb-2">Filter by tags</p>
+          <div className="flex flex-wrap gap-2">
+            {allTags.map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => {
+                  const next = new Set(selectedTagIds)
+                  if (next.has(tag.id)) next.delete(tag.id); else next.add(tag.id)
+                  setSelectedTagIds(next)
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  selectedTagIds.has(tag.id)
+                    ? 'text-white border'
+                    : 'text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700'
+                }`}
+                style={selectedTagIds.has(tag.id) ? { backgroundColor: tag.color + '30', borderColor: tag.color + '60', color: tag.color } : {}}
+              >
+                <Hash size={12} />
+                {tag.name}
+              </button>
+            ))}
+            {selectedTagIds.size > 0 && (
+              <button
+                onClick={() => setSelectedTagIds(new Set())}
+                className="text-xs text-gray-500 hover:text-gray-300 px-2 cursor-pointer"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="text-center py-20">
           <Users size={48} className="text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-400 mb-2">No contacts yet</h3>
+          <h3 className="text-lg font-medium text-gray-400 mb-2">No contacts found</h3>
           <p className="text-gray-500 text-sm">Contacts will appear here when users interact with your flows</p>
         </div>
       ) : (
@@ -76,7 +126,7 @@ export default function Contacts({ user }: ContactsProps) {
               <tr className="border-b border-gray-800">
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Platform</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Platform ID</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Tags</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Created</th>
               </tr>
             </thead>
@@ -84,14 +134,14 @@ export default function Contacts({ user }: ContactsProps) {
               {filtered.map((contact) => {
                 const PlatformIcon = platformIcons[contact.platform] || Globe
                 return (
-                  <tr key={contact.id} className="hover:bg-gray-800/50 transition-colors">
+                  <tr key={contact.id} className="hover:bg-gray-800/50 transition-colors group">
                     <td className="px-6 py-4">
                       <button
                         onClick={() => navigate(`/contacts/${contact.id}`)}
                         className="text-sm font-medium text-white hover:text-cyan-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         {contact.name || 'Unknown'}
-                        <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" />
+                        <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
                     </td>
                     <td className="px-6 py-4">
@@ -100,7 +150,13 @@ export default function Contacts({ user }: ContactsProps) {
                         {contact.platform}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-400 font-mono">{contact.platform_id}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        <span className="text-xs text-gray-500">
+                          {allTags.length === 0 ? '-' : ''}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{new Date(contact.created_at).toLocaleDateString()}</td>
                   </tr>
                 )
