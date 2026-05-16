@@ -1,0 +1,14 @@
+[functions]
+enabled = true
+
+[functions.telegram-bot]
+enabled = true
+verify_jwt = false
+
+[functions.ai-generate]
+enabled = true
+verify_jwt = true
+
+[functions.send-email]
+enabled = true
+verify_jwt = true
